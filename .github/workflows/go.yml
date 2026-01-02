@@ -1,34 +1,30 @@
-name: Build SubDecode on Release
+name: Build on manual release publish
 
 on:
   release:
-    types: [published]  # Triggered when user publishes a release manually
+    types: [published]
 
 jobs:
-  build-and-upload:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
-      - name: Install dependencies
+      - name: Build Windows x86
         working-directory: src
-        run: go mod tidy
+        run: |
+          go mod tidy
+          GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
 
-      - name: Build Windows x86 binary
-        working-directory: src
-        run: GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
-
-      - name: Upload binary to this release
-        uses: actions/upload-release-asset@v2
+      - name: Upload asset to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./SubDecode.exe
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: SubDecode.exe
           asset_name: SubDecode.exe
-          asset_content_type: application/octet-stream
+          tag: ${{ github.ref }}
