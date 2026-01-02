@@ -1,11 +1,11 @@
-name: Build SubDecode for Windows
+name: Build SubDecode on Release
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]  # Triggered when user publishes a release manually
 
 jobs:
-  build:
+  build-and-upload:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,8 +25,10 @@ jobs:
         working-directory: src
         run: GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
 
-      - name: Upload Windows binary
-        uses: actions/upload-artifact@v4
+      - name: Upload binary to this release
+        uses: actions/upload-release-asset@v2
         with:
-          name: SubDecode-Windows
-          path: SubDecode.exe
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./SubDecode.exe
+          asset_name: SubDecode.exe
+          asset_content_type: application/octet-stream
