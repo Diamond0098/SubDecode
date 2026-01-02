@@ -1,0 +1,32 @@
+name: Build SubDecode for Windows
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        working-directory: src
+        run: go mod tidy
+
+      - name: Build Windows x86 binary
+        working-directory: src
+        run: GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: SubDecode-Windows
+          path: SubDecode.exe
