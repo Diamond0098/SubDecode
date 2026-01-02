@@ -1,0 +1,30 @@
+name: Build on Manual Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build Windows x86
+        working-directory: src
+        run: |
+          go mod tidy
+          GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
+
+      - name: Upload binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SubDecode.exe
