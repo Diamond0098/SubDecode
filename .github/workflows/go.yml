@@ -4,12 +4,15 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v4
         with:
@@ -19,12 +22,10 @@ jobs:
         working-directory: src
         run: |
           go mod tidy
+          # Builds the .exe and places it in the root folder (../)
           GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
 
       - name: Upload binary to release
-        uses: svenstaro/upload-release-action@v2
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: SubDecode.exe
-          asset_name: SubDecode.exe
-          tag: ${{ github.ref }}
+          files: SubDecode.exe
