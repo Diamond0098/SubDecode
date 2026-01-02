@@ -25,8 +25,8 @@ var userAgents = map[string]string{
 }
 
 func main() {
-	link := flag.String("link", "", "subscription link (required)")
-	flag.StringVar(link, "l", "", "subscription link (short)")
+	link := flag.String("link", "", "subscription link or local file (required)")
+	flag.StringVar(link, "l", "", "subscription link or local file (short)")
 
 	proxy := flag.String("proxy", "", "proxy URL (optional)")
 	flag.StringVar(proxy, "p", "", "proxy URL (short)")
@@ -44,50 +44,68 @@ func main() {
 	}
 
 	if *link == "" {
-		fmt.Println("❌ No subscription link provided!")
+		fmt.Println("❌ No subscription link or file provided!")
 		showHelp()
 		return
 	}
 
-	client, err := buildClient(*proxy)
-	if err != nil {
-		fmt.Println("❌ Proxy error:", err)
+	var newLines []string
+
+	if isURL(*link) {
+		client, err := buildClient(*proxy)
+		if err != nil {
+			fmt.Println("❌ Proxy error:", err)
+			return
+		}
+
+		req, err := http.NewRequest("GET", *link, nil)
+		if err != nil {
+			fmt.Println("❌ Invalid URL:", err)
+			return
+		}
+
+		agent := userAgents[*ua]
+		if agent == "" {
+			agent = userAgents["chrome"]
+		}
+		req.Header.Set("User-Agent", agent)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			printNetError(err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("❌ HTTP error: %s (%d)\n", resp.Status, resp.StatusCode)
+			return
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		content := string(body)
+
+		decoded, err := decodeBase64(content)
+		if err != nil {
+			newLines = normalize(content)
+			fmt.Println("ℹ Plain text subscription detected from URL")
+		} else {
+			newLines = normalize(decoded)
+			fmt.Println("ℹ Base64 subscription detected from URL")
+		}
+
+	} else if fileExists(*link) {
+		content, err := os.ReadFile(*link)
+		if err != nil {
+			fmt.Println("❌ Failed to read file:", err)
+			return
+		}
+		newLines = normalize(string(content))
+		fmt.Println("ℹ Read configs from local file:", *link)
+	} else {
+		fmt.Println("❌ Input is neither a valid URL nor an existing file")
 		return
 	}
-
-	req, err := http.NewRequest("GET", *link, nil)
-	if err != nil {
-		fmt.Println("❌ Invalid URL:", err)
-		return
-	}
-
-	agent := userAgents[*ua]
-	if agent == "" {
-		agent = userAgents["chrome"]
-	}
-	req.Header.Set("User-Agent", agent)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		printNetError(err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("❌ HTTP error: %s (%d)\n", resp.Status, resp.StatusCode)
-		return
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-
-	decoded, err := decodeBase64(string(body))
-	if err != nil {
-		fmt.Println("❌ Invalid Base64 subscription")
-		return
-	}
-
-	newLines := normalize(decoded)
 
 	outDir := "output"
 	_ = os.MkdirAll(outDir, 0755)
@@ -96,11 +114,10 @@ func main() {
 	outFile := filepath.Join(outDir, filename+".txt")
 
 	oldLines := loadExisting(outFile)
-
 	added, unchanged, removed := diff(oldLines, newLines)
 
 	if added == 0 && removed == 0 {
-		fmt.Println("✅ UPDATED")
+		fmt.Println("ℹ No updates detected, file is already up to date.")
 	} else {
 		final := strings.Join(newLines, "\n")
 		err := os.WriteFile(outFile, []byte(final), 0644)
@@ -122,8 +139,6 @@ func main() {
 	}
 }
 
-/* ---------------- Helpers ---------------- */
-
 func showHelp() {
 	fmt.Println(`
 ================= SubDecode =================
@@ -134,10 +149,10 @@ Usage:
   SubDecode [flags]
 
 Flags:
-  -l, --link   <URL>       Subscription link (required)
-  -p, --proxy  <URL>       Optional HTTP/HTTPS proxy (e.g., http://127.0.0.1:10809)
-  -ua          <agent>     User-Agent: chrome | firefox | edge | curl (default: chrome)
-  -h, --help               Show this help page
+  -l, --link   <URL|file> Subscription link (Base64/plain) or local text file (required)
+  -p, --proxy  <URL>      Optional HTTP/HTTPS proxy (e.g., http://127.0.0.1:10809)
+  -ua          <agent>    User-Agent: chrome | firefox | edge | curl (default: chrome)
+  -h, --help              Show this help page
 
 By Diamond (https://github.com/Diamond0098)
 `)
@@ -260,4 +275,14 @@ func sanitizeFileName(link string) string {
 		"=", "_",
 	)
 	return replacer.Replace(link)
+}
+
+func isURL(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
