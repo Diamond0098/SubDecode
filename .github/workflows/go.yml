@@ -1,4 +1,4 @@
-name: Build on manual release publish
+name: Build on Manual Release
 
 on:
   release:
@@ -21,7 +21,7 @@ jobs:
           go mod tidy
           GOOS=windows GOARCH=386 go build -o ../SubDecode.exe ./...
 
-      - name: Upload asset to release
+      - name: Upload binary to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
